@@ -31,6 +31,19 @@ namespace apache { namespace thrift { namespace transport {
 class AccessManager;
 class SSLContext;
 
+enum SSLProtocol {
+  //SSLTLS        = 0,  // Supports SSLv3 and TLSv1. Disabled.
+  //SSLv2         = 1,  // HORRIBLY INSECURE!
+  //SSLv3         = 2,  // Also too insecure
+  TLSv1_0         = 3,  // Supports TLSv1_0 only.
+  TLSv1_1         = 4,  // Supports TLSv1_1 only.
+  TLSv1_2         = 5,  // Supports TLSv1_2 only.
+  TLSv1_0_plus    = 6,  // Supports TLSv1_0 and all later protocols
+  TLSv1_1_plus    = 7,  // Supports TLSv1_0 and all later protocols
+  TLSv1_2_plus    = 8,  // Supports TLSv1_0 and all later protocols
+};
+
+
 /**
  * OpenSSL implementation for SSL socket interface.
  */
@@ -108,8 +121,10 @@ class TSSLSocketFactory {
  public:
   /**
    * Constructor/Destructor
+   *
+   * @param protocol The SSL/TLS protocol to use.
    */
-  TSSLSocketFactory();
+  TSSLSocketFactory(const SSLProtocol& protocol = TLSv1_0_plus);
   virtual ~TSSLSocketFactory();
   /**
    * Create an instance of TSSLSocket with a fresh new socket.
@@ -234,7 +249,7 @@ class TSSLException: public TTransportException {
  */
 class SSLContext {
  public:
-  SSLContext();
+  SSLContext(const SSLProtocol& protocol = TLSv1_0_plus);
   virtual ~SSLContext();
   SSL* createSSL();
   SSL_CTX* get() { return ctx_; }

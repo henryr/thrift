@@ -39,6 +39,7 @@
 #include "TSSLSocket.h"
 
 #define OPENSSL_VERSION_NO_THREAD_ID 0x10000000L
+#define OPENSSL_VERSION_HAS_TLS_1_1 0x10001000L
 
 using namespace std;
 using namespace boost;
@@ -56,15 +57,41 @@ static bool matchName(const char* host, const char* pattern, int size);
 static char uppercase(char c);
 
 // SSLContext implementation
-SSLContext::SSLContext() {
-  ctx_ = SSL_CTX_new(SSLv23_method());
+SSLContext::SSLContext(const SSLProtocol& protocol) {
+  // Never SSLv2 or v3.
+  int options = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3;
+
+  switch (protocol) {
+    case TLSv1_0:
+      ctx_ = SSL_CTX_new(TLSv1_method());
+      break;
+#if OPENSSL_VERSION_NUMBER >= OPENSSL_VERSION_HAS_TLS_1_1
+    case TLSv1_1:
+      ctx_ = SSL_CTX_new(TLSv1_1_method());
+      break;
+    case TLSv1_2:
+      ctx_ = SSL_CTX_new(TLSv1_2_method());
+      break;
+    case TLSv1_2_plus:
+      options |= SSL_OP_NO_TLSv1_1;
+    case TLSv1_1_plus:
+      options |= SSL_OP_NO_TLSv1;
+#endif
+    case TLSv1_0_plus:
+      ctx_ = SSL_CTX_new(SSLv23_method());
+      break;
+    default:
+      throw TSSLException("SSL_CTX_new: Unknown protocol");
+  }
+
   if (ctx_ == NULL) {
     string errors;
     buildErrors(errors);
     throw TSSLException("SSL_CTX_new: " + errors);
   }
   SSL_CTX_set_mode(ctx_, SSL_MODE_AUTO_RETRY);
-  SSL_CTX_set_options(ctx_, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3);
+
+  SSL_CTX_set_options(ctx_, options);
 }
 
 SSLContext::~SSLContext() {
@@ -351,14 +378,14 @@ bool     TSSLSocketFactory::initialized = false;
 uint64_t TSSLSocketFactory::count_ = 0;
 Mutex    TSSLSocketFactory::mutex_;
 
-TSSLSocketFactory::TSSLSocketFactory(): server_(false) {
+TSSLSocketFactory::TSSLSocketFactory(const SSLProtocol& protocol): server_(false) {
   Guard guard(mutex_);
   if (count_ == 0) {
     initializeOpenSSL();
     randomize();
   }
   count_++;
-  ctx_ = boost::shared_ptr<SSLContext>(new SSLContext);
+  ctx_ = boost::shared_ptr<SSLContext>(new SSLContext(protocol));
 }
 
 TSSLSocketFactory::~TSSLSocketFactory() {
