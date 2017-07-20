@@ -27,14 +27,52 @@
 #include <set>
 #include <string>
 #include <sstream>
+#include <type_traits>
+
+#include <boost/type_traits.hpp>
 
 namespace apache {
 namespace thrift {
 
+template <typename, typename = void>
+struct has_ostream_operator : std::false_type {};
+
 template <typename T>
 std::string to_string(const T& t) {
-  return boost::lexical_cast<std::string>(t);
+  std::stringstream ss;
+  //t.printTo(ss);
+  return ss.str();
 }
+
+// template < >
+// std::string to_string(const int& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
+
+// template < >
+// std::string to_string(const long& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
+
+// template < >
+// std::string to_string(const short& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
+
+// template < >
+// std::string to_string(const bool& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
+
+// template < >
+// std::string to_string(const char& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
+
+// template < >
+// std::string to_string(const double& i) {
+//   return boost::lexical_cast<std::string>(i);
+// }
 
 template <typename K, typename V>
 std::string to_string(const std::map<K, V>& m);

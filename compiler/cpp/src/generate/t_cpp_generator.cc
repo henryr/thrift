@@ -235,7 +235,6 @@ public:
                                    const char* suffix,
                                    bool include_values);
 
-  void generate_struct_ostream_operator(std::ofstream& f, t_struct* tstruct);
   void generate_struct_print_method_decl(std::ofstream& f, t_struct* tstruct);
   void generate_exception_what_method_decl(std::ofstream& f,
                                            t_struct* tstruct,
@@ -1104,10 +1103,6 @@ void t_cpp_generator::generate_struct_declaration(ofstream& out,
     out << indent() << "void swap(" << tstruct->get_name() << " &a, " << tstruct->get_name()
         << " &b);" << endl << endl;
   }
-
-  if (stream) {
-    generate_struct_ostream_operator(out, tstruct);
-  }
 }
 
 void t_cpp_generator::generate_struct_definition(ofstream& out,
@@ -1454,17 +1449,6 @@ void t_cpp_generator::generate_struct_swap(ofstream& out, t_struct* tstruct) {
   out << endl;
 }
 
-void t_cpp_generator::generate_struct_ostream_operator(std::ofstream& out, t_struct* tstruct) {
-  out << "inline std::ostream& operator<<(std::ostream& out, const "
-      << tstruct->get_name()
-      << "& obj)" << endl;
-  scope_up(out);
-  out << indent() << "obj.printTo(out);" << endl
-      << indent() << "return out;" << endl;
-  scope_down(out);
-  out << endl;
-}
-
 void t_cpp_generator::generate_struct_print_method_decl(std::ofstream& out, t_struct* tstruct) {
   out << "void ";
   if (tstruct) {
@@ -1561,7 +1545,8 @@ void t_cpp_generator::generate_exception_what_method(std::ofstream& out, t_struc
 
   indent_up();
   out << indent() << "std::stringstream ss;" << endl;
-  out << indent() << "ss << \"TException - service has thrown: \" << *this;" << endl;
+  out << indent() << "std::stringstream printed; this->printTo(printed);" << endl;
+  out << indent() << "ss << \"TException - service has thrown: \" << printed.str();" << endl;
   out << indent() << "this->thriftTExceptionMessageHolder_ = ss.str();" << endl;
   out << indent() << "return this->thriftTExceptionMessageHolder_.c_str();" << endl;
   indent_down();
@@ -2148,7 +2133,7 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
   // Generate the header portion
   if(style == "Concurrent")
   {
-    f_header_ << 
+    f_header_ <<
       "// The \'concurrent\' client is a thread safe client that correctly handles\n"
       "// out of order responses.  It is slower than the regular client, so should\n"
       "// only be used when you need to share a connection among multiple threads\n";
@@ -2314,10 +2299,10 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
                 << "boost::shared_ptr< ::apache::thrift::transport::TMemoryBuffer> otrans_;"
                 << endl;
     }
-    f_header_ << 
-      indent() << prot_ptr << " piprot_;" << endl << 
-      indent() << prot_ptr << " poprot_;" << endl << 
-      indent() << protocol_type << "* iprot_;" << endl << 
+    f_header_ <<
+      indent() << prot_ptr << " piprot_;" << endl <<
+      indent() << prot_ptr << " poprot_;" << endl <<
+      indent() << protocol_type << "* iprot_;" << endl <<
       indent() << protocol_type << "* oprot_;" << endl;
 
     if (style == "Concurrent") {
@@ -2432,17 +2417,17 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
         }
       }
       // Serialize the request
-      out << 
+      out <<
         indent() << "int32_t cseqid = " << cseqidVal << ";" << endl;
       if(style == "Concurrent") {
         out <<
           indent() << "::apache::thrift::async::TConcurrentSendSentry sentry(&this->sync_);" << endl;
       }
       out <<
-        indent() << _this << "oprot_->writeMessageBegin(\"" << 
-        (*f_iter)->get_name() << 
-        "\", ::apache::thrift::protocol::" << ((*f_iter)->is_oneway() ? "T_ONEWAY" : "T_CALL") << 
-        ", cseqid);" << endl << endl << 
+        indent() << _this << "oprot_->writeMessageBegin(\"" <<
+        (*f_iter)->get_name() <<
+        "\", ::apache::thrift::protocol::" << ((*f_iter)->is_oneway() ? "T_ONEWAY" : "T_CALL") <<
+        ", cseqid);" << endl << endl <<
         indent() << argsname << " args;" << endl;
 
       for (fld_iter = fields.begin(); fld_iter != fields.end(); ++fld_iter) {
@@ -2491,9 +2476,9 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
         indent(out) << function_signature(&recv_function, "", scope) << endl;
         scope_up(out);
 
-        out << endl << 
-          indent() << "int32_t rseqid = 0;" << endl << 
-          indent() << "std::string fname;" << endl << 
+        out << endl <<
+          indent() << "int32_t rseqid = 0;" << endl <<
+          indent() << "std::string fname;" << endl <<
           indent() << "::apache::thrift::protocol::TMessageType mtype;" << endl;
         if(style == "Concurrent") {
           out <<
@@ -2522,10 +2507,10 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
           indent_up();
         }
         out <<
-          indent() << "if (mtype == ::apache::thrift::protocol::T_EXCEPTION) {" << endl << 
-          indent() << "  ::apache::thrift::TApplicationException x;" << endl << 
-          indent() << "  x.read(" << _this << "iprot_);" << endl << 
-          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl << 
+          indent() << "if (mtype == ::apache::thrift::protocol::T_EXCEPTION) {" << endl <<
+          indent() << "  ::apache::thrift::TApplicationException x;" << endl <<
+          indent() << "  x.read(" << _this << "iprot_);" << endl <<
+          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl <<
           indent() << "  " << _this << "iprot_->getTransport()->readEnd();" << endl;
         if (style == "Cob" && !gen_no_client_completion_) {
           out << indent() << "  completed = true;" << endl << indent() << "  completed__(true);"
@@ -2534,22 +2519,22 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
         if (style == "Concurrent") {
           out << indent() << "  sentry.commit();" << endl;
         }
-        out << 
-          indent() << "  throw x;" << endl << 
-          indent() << "}" << endl << 
-          indent() << "if (mtype != ::apache::thrift::protocol::T_REPLY) {" << endl << 
-          indent() << "  " << _this << "iprot_->skip(" << "::apache::thrift::protocol::T_STRUCT);" << endl << 
-          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl << 
+        out <<
+          indent() << "  throw x;" << endl <<
+          indent() << "}" << endl <<
+          indent() << "if (mtype != ::apache::thrift::protocol::T_REPLY) {" << endl <<
+          indent() << "  " << _this << "iprot_->skip(" << "::apache::thrift::protocol::T_STRUCT);" << endl <<
+          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl <<
           indent() << "  " << _this << "iprot_->getTransport()->readEnd();" << endl;
         if (style == "Cob" && !gen_no_client_completion_) {
           out << indent() << "  completed = true;" << endl << indent() << "  completed__(false);"
               << endl;
         }
-        out << 
-          indent() << "}" << endl << 
-          indent() << "if (fname.compare(\"" << (*f_iter)->get_name() << "\") != 0) {" << endl << 
-          indent() << "  " << _this << "iprot_->skip(" << "::apache::thrift::protocol::T_STRUCT);" << endl << 
-          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl << 
+        out <<
+          indent() << "}" << endl <<
+          indent() << "if (fname.compare(\"" << (*f_iter)->get_name() << "\") != 0) {" << endl <<
+          indent() << "  " << _this << "iprot_->skip(" << "::apache::thrift::protocol::T_STRUCT);" << endl <<
+          indent() << "  " << _this << "iprot_->readMessageEnd();" << endl <<
           indent() << "  " << _this << "iprot_->getTransport()->readEnd();" << endl;
         if (style == "Cob" && !gen_no_client_completion_) {
           out << indent() << "  completed = true;" << endl << indent() << "  completed__(false);"
@@ -2582,7 +2567,7 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
         // Careful, only look for _result if not a void function
         if (!(*f_iter)->get_returntype()->is_void()) {
           if (is_complex_type((*f_iter)->get_returntype())) {
-            out << 
+            out <<
               indent() << "if (result.__isset.success) {" << endl;
             out <<
               indent() << "  // _return pointer has now been filled" << endl;
@@ -2593,8 +2578,8 @@ void t_cpp_generator::generate_service_client(t_service* tservice, string style)
             if (style == "Concurrent") {
               out << indent() << "  sentry.commit();" << endl;
             }
-            out << 
-              indent() << "  return;" << endl << 
+            out <<
+              indent() << "  return;" << endl <<
               indent() << "}" << endl;
           } else {
             out << indent() << "if (result.__isset.success) {" << endl;
