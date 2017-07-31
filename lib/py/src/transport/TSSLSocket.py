@@ -23,7 +23,7 @@ import ssl
 
 from thrift.transport import TSocket
 from thrift.transport.TTransport import TTransportException
-from .packages.ssl_match_hostname import match_hostname, CertificateError
+
 
 class TSSLSocket(TSocket.TSocket):
   """
@@ -105,7 +105,8 @@ class TSSLSocket(TSocket.TSocket):
   def _validate_cert(self):
     """internal method to validate the peer's SSL certificate, and to check the
     commonName of the certificate to ensure it matches the hostname we
-    used to make this connection.
+    used to make this connection.  Does not support subjectAltName records
+    in certificates.
 
     raises TTransportException if the certificate fails validation.
     """
@@ -115,16 +116,27 @@ class TSSLSocket(TSocket.TSocket):
       raise TTransportException(
         type=TTransportException.NOT_OPEN,
         message='No SSL certificate found from %s:%s' % (self.host, self.port))
-    try:
-      match_hostname(cert, self.host)
-      self.is_valid = True
-      return
-    except CertificateError, ce:
-      raise TTransportException(
-        type=TTransportException.UNKNOWN,
-        message='Hostname we connected to "%s" doesn\'t match certificate '
-                'provided commonName or subjectAltNames' % (self.host))
-
+    fields = cert['subject']
+    for field in fields:
+      # ensure structure we get back is what we expect
+      if not isinstance(field, tuple):
+        continue
+      cert_pair = field[0]
+      if len(cert_pair) < 2:
+        continue
+      cert_key, cert_value = cert_pair[0:2]
+      if cert_key != 'commonName':
+        continue
+      certhost = cert_value
+      if certhost == self.host:
+        # success, cert commonName matches desired hostname
+        self.is_valid = True
+        return
+      else:
+        raise TTransportException(
+          type=TTransportException.UNKNOWN,
+          message='Hostname we connected to "%s" doesn\'t match certificate '
+                  'provided commonName "%s"' % (self.host, certhost))
     raise TTransportException(
       type=TTransportException.UNKNOWN,
       message='Could not validate SSL certificate from '
