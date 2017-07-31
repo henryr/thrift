@@ -190,8 +190,6 @@ class ThreadManager {
    */
   static boost::shared_ptr<ThreadManager> newSimpleThreadManager(size_t count=4, size_t pendingTaskCountMax=0);
 
-  class Task;
-
   class Worker;
 
   class Impl;
